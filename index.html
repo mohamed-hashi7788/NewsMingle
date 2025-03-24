@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NewsMingle</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            background-image: url('https://t4.ftcdn.net/jpg/10/29/41/15/360_F_1029411519_kNcUimLCeOgFmWXudgccCw88n4c2bRqd.jpg'); /* Replace with your image URL */
+            background-size: cover;
+            background-position: center;
+        }
+
+        header {
+            background-color: #4CAF50;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        main {
+            padding: 20px;
+            background-color: rgba(255, 255, 255, 0.8);
+        }
+
+        section {
+            margin-bottom: 20px;
+        }
+
+        #papers-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .paper-item {
+            border: 2px solid #ddd;
+            padding: 15px;
+            width: 200px;
+            background-color: #f9f9f9;
+            transition: transform 0.2s;
+        }
+
+        .paper-item:hover {
+            transform: scale(1.05);
+            background-color: #e6ffe6;
+        }
+
+        .read-button, .delete-button, #upload-section button {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: transform 0.2s;
+            border-radius: 5px;
+            margin-top: 5px;
+        }
+
+        .read-button:hover, .delete-button:hover, #upload-section button:hover {
+            transform: scale(1.1);
+            background-color: #45a049;
+        }
+
+        #paper-viewer {
+            display: none;
+            border: 2px solid #ddd;
+            padding: 20px;
+            margin-top: 20px;
+            background-color: #ffffff;
+        }
+
+        #pdf-canvas {
+            border: 1px solid #ddd;
+        }
+
+        .star-rating {
+            direction: rtl;
+            display: inline-block;
+            font-size: 20px;
+        }
+
+        .star-rating input[type="radio"] {
+            display: none;
+        }
+
+        .star-rating label {
+            color: #ddd;
+            cursor: pointer;
+            font-size: 25px;
+        }
+
+        .star-rating label:hover,
+        .star-rating label:hover ~ label,
+        .star-rating input[type="radio"]:checked ~ label {
+            color: #ffc700;
+        }
+
+        /* Comment Section Styles */
+        #comment-section {
+            margin-top: 20px;
+        }
+
+        #comment-section textarea {
+            width: 100%;
+            height: 100px;
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+
+        #comment-section button {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+
+        #comment-section button:hover {
+            background-color: #45a049;
+        }
+
+        #comments-list {
+            margin-top: 10px;
+        }
+
+        .comment-item {
+            background-color: #f9f9f9;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            margin-bottom: 10px;
+        }
+
+        /* PDF Navigation Controls */
+        #pdf-navigation {
+            margin-top: 10px;
+            text-align: center;
+        }
+
+        #pdf-navigation button {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            border-radius: 5px;
+            margin: 0 5px;
+        }
+
+        #pdf-navigation button:hover {
+            background-color: #45a049;
+        }
+
+        #page-number {
+            margin: 0 10px;
+            font-weight: bold;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.14.305/pdf.min.js"></script>
+</head>
+<body>
+    <header>
+        <h1>NewsMingle</h1>
+    </header>
+    <main>
+        <section id="upload-section">
+            <h2>Upload a Newspaper</h2>
+            <input type="file" id="file-upload" accept=".txt, .pdf">
+            <button onclick="uploadFile()">Upload</button>
+        </section>
+        <section id="papers-section">
+            <h2>Uploaded Newspapers</h2>
+            <div id="papers-list"></div>
+        </section>
+        <section id="paper-viewer">
+            <h2>Newspaper Viewer</h2>
+            <canvas id="pdf-canvas" width="600"></canvas>
+            <div id="pdf-navigation">
+                <button onclick="previousPage()">Previous</button>
+                <span id="page-number">Page 1 of 1</span>
+                <button onclick="nextPage()">Next</button>
+            </div>
+            <div id="content-display"></div>
+            <div id="comment-section">
+                <h3>Comments</h3>
+                <textarea id="comment-input" placeholder="Add a comment..."></textarea>
+                <button onclick="addComment()">Post Comment</button>
+                <div id="comments-list"></div>
+            </div>
+            <button onclick="goToHomepage()">Back to Homepage</button>
+        </section>
+    </main>
+    <script>
+        let papers = JSON.parse(localStorage.getItem('papers')) || [];
+        let currentPaperIndex = null;
+        let currentPDF = null;
+        let currentPage = 1;
+        let totalPages = 1;
+
+        function uploadFile() {
+            const fileInput = document.getElementById('file-upload');
+            const file = fileInput.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    papers.push({
+                        name: file.name,
+                        content: e.target.result,
+                        type: file.type,
+                        comments: [] // Add a comments array for each paper
+                    });
+                    localStorage.setItem('papers', JSON.stringify(papers));
+                    displayPapers();
+                };
+                if (file.type === "application/pdf") {
+                    reader.readAsDataURL(file);
+                } else {
+                    reader.readAsText(file);
+                }
+            }
+        }
+
+        function displayPapers() {
+            const papersList = document.getElementById('papers-list');
+            papersList.innerHTML = '';
+            papers.forEach((paper, index) => {
+                const paperItem = document.createElement('div');
+                paperItem.className = 'paper-item';
+                paperItem.innerHTML = `
+                    <h3>${paper.name}</h3>
+                    <button class="read-button" onclick="readPaper(${index})">Read</button>
+                    <button class="delete-button" onclick="deletePaper(${index})">Delete</button>
+                    <div class="star-rating">
+                        <input type="radio" id="5-stars-${index}" name="rating-${index}" value="5">
+                        <label for="5-stars-${index}">&#9733;</label>
+                        <input type="radio" id="4-stars-${index}" name="rating-${index}" value="4">
+                        <label for="4-stars-${index}">&#9733;</label>
+                        <input type="radio" id="3-stars-${index}" name="rating-${index}" value="3">
+                        <label for="3-stars-${index}">&#9733;</label>
+                        <input type="radio" id="2-stars-${index}" name="rating-${index}" value="2">
+                        <label for="2-stars-${index}">&#9733;</label>
+                        <input type="radio" id="1-star-${index}" name="rating-${index}" value="1">
+                        <label for="1-star-${index}">&#9733;</label>
+                    </div>
+                `;
+                papersList.appendChild(paperItem);
+            });
+        }
+
+        function readPaper(index) {
+            const paper = papers[index];
+            currentPaperIndex = index;
+            const viewer = document.getElementById('paper-viewer');
+            const contentDisplay = document.getElementById('content-display');
+            const pdfCanvas = document.getElementById('pdf-canvas');
+
+            if (paper.type === "application/pdf") {
+                contentDisplay.style.display = 'none';
+                pdfCanvas.style.display = 'block';
+                loadPDF(paper.content);
+            } else {
+                pdfCanvas.style.display = 'none';
+                contentDisplay.style.display = 'block';
+                contentDisplay.innerText = paper.content;
+            }
+
+            // Display comments
+            const commentsList = document.getElementById('comments-list');
+            commentsList.innerHTML = '';
+            paper.comments.forEach(comment => {
+                const commentItem = document.createElement('div');
+                commentItem.className = 'comment-item';
+                commentItem.innerText = comment;
+                commentsList.appendChild(commentItem);
+            });
+
+            viewer.style.display = 'block';
+        }
+
+        function loadPDF(dataUrl) {
+            const loadingTask = pdfjsLib.getDocument(dataUrl);
+            loadingTask.promise.then(function(pdf) {
+                currentPDF = pdf;
+                totalPages = pdf.numPages;
+                currentPage = 1;
+                updatePageNumber();
+                renderPage(currentPage);
+            });
+        }
+
+        function renderPage(pageNumber) {
+            currentPDF.getPage(pageNumber).then(function(page) {
+                const canvas = document.getElementById('pdf-canvas');
+                const context = canvas.getContext('2d');
+                const viewport = page.getViewport({scale: 1.5});
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
+
+                const renderContext = {
+                    canvasContext: context,
+                    viewport: viewport
+                };
+                page.render(renderContext);
+            });
+        }
+
+        function nextPage() {
+            if (currentPage < totalPages) {
+                currentPage++;
+                renderPage(currentPage);
+                updatePageNumber();
+            }
+        }
+
+        function previousPage() {
+            if (currentPage > 1) {
+                currentPage--;
+                renderPage(currentPage);
+                updatePageNumber();
+            }
+        }
+
+        function updatePageNumber() {
+            document.getElementById('page-number').innerText = `Page ${currentPage} of ${totalPages}`;
+        }
+
+        function addComment() {
+            const commentInput = document.getElementById('comment-input');
+            const comment = commentInput.value.trim();
+            if (comment && currentPaperIndex !== null) {
+                papers[currentPaperIndex].comments.push(comment);
+                localStorage.setItem('papers', JSON.stringify(papers));
+                readPaper(currentPaperIndex); // Refresh the view to show the new comment
+                commentInput.value = ''; // Clear the input field
+            }
+        }
+
+        function deletePaper(index) {
+            papers.splice(index, 1);
+            localStorage.setItem('papers', JSON.stringify(papers));
+            displayPapers();
+        }
+
+        function goToHomepage() {
+            const viewer = document.getElementById('paper-viewer');
+            viewer.style.display = 'none'; // Hide the viewer
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            displayPapers();
+        });
+    </script>
+</body>
+</html>"
